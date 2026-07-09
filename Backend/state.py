@@ -7,8 +7,8 @@ class Agent:
         self.last_control = None
 
     def step(self, user_text: str):
-        selected = retrieval.search(self.cards, user_text, k=5)
-        cards_text = "\n\n".join(c["text"] for c in selected)
+        selected = retrieval.search(self.cards, user_text, k=4)
+        cards_text = "\n\n".join(f"[{c['id']}] {c['text']}" for c in selected)
         prompt = prompts.SYSTEM + "\n\n" + prompts.USER_TEMPLATE.format(
             user_text=user_text, cards_text=cards_text
         )

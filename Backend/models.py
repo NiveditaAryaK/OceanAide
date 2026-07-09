@@ -1,3 +1,4 @@
+
 import os, requests
 
 BASE = os.environ.get("MODEL_BASE", "http://127.0.0.1:1234/v1")  # LM Studio default
@@ -14,10 +15,13 @@ def generate(prompt: str) -> str:
                 {"role":"system","content":"You are Ocean Node."},
                 {"role":"user","content": prompt}
             ],
-            "temperature": 0,
-            "stream": False
+            "temperature": 0.0,
+            "top_p": 1.0,
+            "max_tokens": 512,
+            "stream": False,
+            "stop": ["</END>"]  # You can add "</END>" at end of prompt if you like
         },
-        timeout=300
+        timeout=120
     )
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
