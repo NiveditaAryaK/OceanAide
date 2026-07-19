@@ -60,7 +60,16 @@ python Backend/eval_rag.py               # retrieval only: hit@1, hit@k, MRR (of
 python Backend/eval_rag.py --generation  # full agent per query (needs the LLM server up)
 ```
 
-The generation mode checks the output contract end to end: control-JSON parse rate, grounding score, caution-line policy, and voice-section discipline. Further modes: `--negative` (out-of-scope rejection), `--rgb` (noise robustness), `--judge` (LLM-judge faithfulness/relevance; calibrate with human labels in `data/eval/judge_calibration.jsonl`).
+The generation mode checks the output contract end to end: control-JSON parse rate, grounding score, caution-line policy, and voice-section discipline. Further modes (all need the LLM server up):
+
+| Flag | Axis | What it measures |
+|---|---|---|
+| `--negative` | Negative rejection (RGB) | Out-of-scope queries (`negative_queries.jsonl`) must be refused, never answered from general knowledge; replies printed for fabrication review |
+| `--rgb` | Noise robustness (RGB) | Half the context replaced with irrelevant cards; parse rate and grounding vs the clean cards compared |
+| `--counterfactual` | Counterfactual robustness (RGB) | A retrieved card is poisoned with a planted falsehood (`counterfactual.jsonl`); replies classified ACCEPTED / ECHOED+FLAGGED / REJECTED / AVOIDED. The system trusts its curated KB by design, so this quantifies the blast radius of index corruption |
+| `--integration` | Information integration | On multi-card queries, does the final reply draw sentences from *every* expected card, not just retrieve them |
+| `--multiturn` | Agent behavior | Scripted 3-turn scenarios (`scenarios.jsonl`) run in one session: escalation to Crisis, de-escalation, reflection — asserting accepted states and legal transitions per turn |
+| `--judge` | Faithfulness + relevance (RAGAS-style) | Local-LLM judge, scores reported separately; add ~15 human labels to `judge_calibration.jsonl` to get an error bar (uncalibrated warning otherwise) |
 
 Current scores (gpt-oss-20b): retrieval **hit@1 100%, hit@4 100%, MRR 1.0, nDCG@4 0.98** (30 queries); generation **parse 100%, caution policy 100%, section discipline 100%, mean grounding 0.98, worst-case 0.83**; **negative rejection 100%** (10 out-of-scope queries, no fabricated answers); noise robustness **parse 100%** with grounding 1.00 → 0.81 when half the context is replaced with irrelevant cards.
 
