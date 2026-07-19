@@ -56,8 +56,11 @@ def _extract_json_object(text: str):
 def split_and_parse(raw: str):
     """Returns (control, reply, parse_ok). parse_ok is False when the model
     broke the output contract and defaults were substituted."""
-    cj_match = re.search(r"CONTROL_JSON:\s*(.*?)\s*REPLY:", raw, re.S)
-    rp_match = re.search(r"REPLY:\s*(.*)\Z", raw, re.S)
+    # Tolerant markers: models dress them up as "**CONTROL_JSON:**",
+    # "### REPLY", or "**REPLY (Guardian):**" — accept any decoration on
+    # the marker line rather than failing the whole contract over it.
+    cj_match = re.search(r"CONTROL_JSON\b(.*?)REPLY\b", raw, re.S)
+    rp_match = re.search(r"REPLY\b[^:\n]*:?\**\s*(.*)\Z", raw, re.S)
 
     if not cj_match or not rp_match:
         # fallback: return defaults + whole raw text as reply

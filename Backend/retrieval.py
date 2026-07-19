@@ -1,4 +1,4 @@
-import json, pathlib, re, unicodedata
+import hashlib, json, pathlib, re, unicodedata
 from typing import List, Dict
 from rank_bm25 import BM25Okapi
 
@@ -63,10 +63,28 @@ def _bm25_init(corpus: List[str]) -> BM25Okapi:
 
 
 def load_cards():
-    cards = []
+    """Load the index, verifying each card against the hash build_index.py
+    stamped on it. The counterfactual eval showed the model repeats whatever
+    the cards say (5/6 poisoned facts echoed verbatim) — the KB is the single
+    point of trust, so a tampered or bit-rotted card must never reach the
+    context window. Corrupted cards are dropped with a loud warning rather
+    than failing closed: at sea, a degraded KB beats no assistant."""
+    cards, corrupted = [], []
     with open(IDX, "r", encoding="utf-8") as f:
         for line in f:
-            cards.append(json.loads(line))
+            c = json.loads(line)
+            expected = c.get("hash")
+            actual = hashlib.sha1(
+                (c.get("id", "") + c.get("text", "")).encode()
+            ).hexdigest()[:10]
+            if expected != actual:
+                corrupted.append(c.get("id", "<no id>"))
+                continue
+            cards.append(c)
+    if corrupted:
+        print(f"[retrieval] WARNING: dropped {len(corrupted)} card(s) failing "
+              f"integrity check: {', '.join(corrupted)}. Rebuild the index "
+              "(python Backend/build_index.py) from a trusted KB.")
     return cards
 
 

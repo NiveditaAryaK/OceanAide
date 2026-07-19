@@ -14,6 +14,16 @@ TRANSITIONS = {
 
 MAX_HISTORY = 3
 
+# Deterministic Crisis tripwire: phrases that always mean danger to life or
+# vessel. The multi-turn eval caught the model labeling "taking on water"
+# as risk=medium — escalation must never depend on the model's own risk
+# label, so these phrases force risk=high (and therefore Crisis) in code.
+CRISIS_TRIPWIRE = (
+    "man overboard", "overboard", "taking on water", "mayday", "sinking",
+    "capsiz", "drowning", "abandon ship", "fire on board", "fire aboard",
+    "not breathing", "unconscious",
+)
+
 
 class Agent:
     def __init__(self, cards):
@@ -43,6 +53,8 @@ class Agent:
             # below, ending in a verbatim top-card reply + caution line.
             raw = ""
         control, reply, parse_ok = guardrails.split_and_parse(raw)
+        if any(p in user_text.lower() for p in CRISIS_TRIPWIRE):
+            control.risk = "high"
         next_state = self._advance(control)
         control.next_state = next_state
 
