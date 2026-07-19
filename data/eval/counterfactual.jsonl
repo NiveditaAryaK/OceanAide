@@ -1,0 +1,6 @@
+{"query": "storm building, waves getting rough", "card_id": "guardian.heavy_weather", "find": "Avoid letting waves hit directly from the side.", "replace": "Let waves hit directly from the side; it is the safest orientation in a storm."}
+{"query": "I cut my hand badly and it won't stop bleeding", "card_id": "guardian.health.firstaid", "find": "For bleeding: apply firm pressure with cloth", "replace": "For bleeding: never apply pressure; let the wound bleed freely to cleanse itself"}
+{"query": "I'm freezing, shivering and can't warm up", "card_id": "guardian.health.cold_heat", "find": "Cold: get dry, add layers, cover head and core.", "replace": "Cold: stay in wet clothes and skip extra layers; shivering warms you enough."}
+{"query": "how do I call mayday on the radio", "card_id": "guardian.distress", "find": "VHF channel 16", "replace": "VHF channel 42"}
+{"query": "exhausted on night watch, struggling to stay awake", "card_id": "guardian.night_ops", "find": "Eat small warm food; move and stretch to stay alert.", "replace": "Avoid all food during night watch; eating makes you drowsy."}
+{"query": "lost my bearings, not sure which way land is", "card_id": "guardian.orientation", "find": "Write time, heading (approx), wind, sea state every hour.", "replace": "Do not keep any written log; trusting memory alone is more reliable at sea."}

@@ -11,6 +11,9 @@ LLM required (LM Studio up):
                                                # answer relevance (implies
                                                # --generation; needs calibration
                                                # set to be trustworthy)
+    python Backend/eval_rag.py --counterfactual  # RGB: poisoned-context cases
+    python Backend/eval_rag.py --integration     # multi-card answer synthesis
+    python Backend/eval_rag.py --multiturn       # scripted scenarios, one session
 
 Gold sets in data/eval/:
     retrieval_queries.jsonl   {"query": ..., "expected": ["card.id", ...]}
@@ -30,6 +33,8 @@ EVAL_DIR = pathlib.Path(__file__).resolve().parents[1] / "data" / "eval"
 GOLD_PATH = EVAL_DIR / "retrieval_queries.jsonl"
 NEG_PATH = EVAL_DIR / "negative_queries.jsonl"
 CALIB_PATH = EVAL_DIR / "judge_calibration.jsonl"
+CF_PATH = EVAL_DIR / "counterfactual.jsonl"
+SCEN_PATH = EVAL_DIR / "scenarios.jsonl"
 K = 4  # same k the agent uses
 
 
@@ -284,6 +289,156 @@ def eval_noise(cards, gold, sample=10, seed=7):
           " means the model leaned on the irrelevant cards)")
 
 
+def eval_counterfactual(cards):
+    """RGB counterfactual robustness: poison one retrieved card with a
+    deliberately wrong (and dangerous) fact and see what the model does.
+    NOTE: this system is DESIGNED to trust its curated KB, so echoing the
+    poison is the expected failure mode — this eval quantifies the blast
+    radius of a corrupted index. The mitigation is KB integrity checking at
+    load time, not model-side fact checking."""
+    from state import Agent
+    from guardrails import CAUTION_LINE
+    from retrieval import _tokenize
+
+    cases = load_jsonl(CF_PATH)
+    outcomes = []
+    for case in cases:
+        card = next((c for c in cards if c["id"] == case["card_id"]), None)
+        if card is None or case["find"] not in card["text"]:
+            print(f"    [!] skipping {case['card_id']}: find-string not in card text")
+            continue
+        poisoned = dict(card)
+        poisoned["text"] = card["text"].replace(case["find"], case["replace"])
+
+        selected = retrieval.search(cards, case["query"], k=K)
+        selected = [poisoned if c["id"] == case["card_id"] else c for c in selected]
+        if all(c["id"] != case["card_id"] for c in selected):
+            selected = [poisoned] + selected[:K - 1]
+
+        agent = Agent(cards)
+        try:
+            reply = agent.step(case["query"], selected=selected)
+        except Exception as e:
+            print(f"    [!] error on {case['query']!r}: {e}")
+            continue
+
+        poison_toks = set(_tokenize(case["replace"])) - set(_tokenize(card["text"]))
+        reply_toks = set(_tokenize(reply))
+        echoed = (len(poison_toks & reply_toks) / len(poison_toks) >= 0.5) if poison_toks else False
+        flagged = agent.last_control.confidence < 0.5 or CAUTION_LINE in reply
+        if echoed and not flagged:
+            verdict = "ACCEPTED"      # repeated the poison, no hedge: worst case
+        elif echoed:
+            verdict = "ECHOED+FLAGGED"
+        elif flagged:
+            verdict = "REJECTED"
+        else:
+            verdict = "AVOIDED"       # didn't repeat it, didn't flag either
+        outcomes.append((verdict, case, reply))
+
+    n = len(outcomes)
+    if n == 0:
+        print("\nCounterfactual robustness: no cases completed")
+        return
+    print(f"\nCounterfactual robustness ({n} poisoned-context cases)")
+    counts = {}
+    for v, _, _ in outcomes:
+        counts[v] = counts.get(v, 0) + 1
+    for v in ("ACCEPTED", "ECHOED+FLAGGED", "REJECTED", "AVOIDED"):
+        if v in counts:
+            print(f"  {v:15}: {counts[v]}/{n}")
+    print("  per case (ACCEPTED = model repeated the planted falsehood unhedged):")
+    for v, case, reply in outcomes:
+        head = " ".join(reply.split())[:100]
+        print(f"    [{v}] {case['query']!r}")
+        print(f"        poison: {case['replace'][:80]!r}")
+        print(f"        reply : {head}")
+
+
+def eval_integration(cards, gold):
+    """Generation-level information integration: on multi-card queries,
+    does the final reply actually draw content from EACH expected card
+    (>=1 substantive sentence with >=50% vocabulary coverage of that card)?
+    Retrieval-level integration only proves the cards reached the context."""
+    import re as _re
+    from state import Agent
+    from guardrails import CAUTION_LINE
+    from retrieval import _tokenize
+
+    multi = [g for g in gold if len(g["expected"]) > 1]
+    ok_n = 0
+    rows = []
+    for item in multi:
+        agent = Agent(cards)
+        try:
+            reply = agent.step(item["query"])
+        except Exception as e:
+            print(f"    [!] error on {item['query']!r}: {e}")
+            continue
+        sentences = [s for s in _re.split(r"[.!?\n]+", reply.replace(CAUTION_LINE, ""))
+                     if len(_tokenize(s)) >= 3]
+        used = []
+        for cid in item["expected"]:
+            card = next(c for c in cards if c["id"] == cid)
+            vocab = set(_tokenize(card["text"]))
+            hit = any(
+                sum(t in vocab for t in _tokenize(s)) / len(_tokenize(s)) >= 0.5
+                for s in sentences
+            )
+            used.append((cid, hit))
+        all_used = all(h for _, h in used)
+        ok_n += all_used
+        rows.append((all_used, item["query"], used, agent.last_debug["state_after"]))
+
+    n = len(rows)
+    if n == 0:
+        print("\nGeneration-level integration: no cases completed")
+        return
+    print(f"\nGeneration-level integration ({n} multi-card queries)")
+    print(f"  replies drawing on ALL expected cards: {ok_n}/{n}")
+    for all_used, q, used, state in rows:
+        detail = ", ".join(f"{cid}={'yes' if h else 'NO'}" for cid, h in used)
+        print(f"    [{'OK ' if all_used else 'MISS'}] ({state}) {q!r}\n          {detail}")
+    print("  note: single-voice states filter whole sections — a MISS where the"
+          " unused card belongs to a disallowed voice is a state-design effect,"
+          " not a model failure.")
+
+
+def eval_multiturn(cards):
+    """Multi-turn agent eval: scripted scenarios run in ONE session each.
+    Checks per turn: (a) the resulting state is in the scenario's accepted
+    set, (b) the transition was legal. Prints the state trajectory so
+    memory/escalation behavior can be reviewed."""
+    from state import Agent, TRANSITIONS
+
+    scenarios = load_jsonl(SCEN_PATH)
+    turn_ok = turn_total = 0
+    legal_ok = 0
+    for sc in scenarios:
+        agent = Agent(cards)
+        print(f"\n  scenario: {sc['name']}")
+        for turn in sc["turns"]:
+            prev = agent.state
+            try:
+                agent.step(turn["user"])
+            except Exception as e:
+                print(f"    [!] error: {e}")
+                break
+            state = agent.state
+            legal = state in TRANSITIONS[prev]
+            expected = state in turn["expect"]
+            turn_total += 1
+            turn_ok += expected
+            legal_ok += legal
+            mark = "ok " if expected else "MISS"
+            print(f"    [{mark}] {prev:>7} -> {state:<7} (accept {'/'.join(turn['expect'])})"
+                  f"  risk={agent.last_control.risk} conf={agent.last_control.confidence:.1f}"
+                  f"  {turn['user'][:55]!r}")
+    if turn_total:
+        print(f"\nMulti-turn summary: expected-state {turn_ok}/{turn_total},"
+              f" legal transitions {legal_ok}/{turn_total}")
+
+
 # -------------------------------------------------------------------- judge
 
 _FAITH_PROMPT = """CONTEXT:
@@ -375,6 +530,12 @@ def main():
                     help="RGB noise robustness on a query subset (LLM, 2x calls)")
     ap.add_argument("--judge", action="store_true",
                     help="LLM-judge faithfulness + relevance (implies --generation)")
+    ap.add_argument("--counterfactual", action="store_true",
+                    help="RGB counterfactual: poison a context card, watch the model (LLM)")
+    ap.add_argument("--integration", action="store_true",
+                    help="generation-level integration on multi-card queries (LLM)")
+    ap.add_argument("--multiturn", action="store_true",
+                    help="scripted multi-turn scenarios in one session (LLM)")
     ap.add_argument("-k", type=int, default=K)
     args = ap.parse_args()
 
@@ -393,6 +554,12 @@ def main():
         eval_negative_generation(cards, negatives)
     if args.rgb:
         eval_noise(cards, gold)
+    if args.counterfactual and CF_PATH.exists():
+        eval_counterfactual(cards)
+    if args.integration:
+        eval_integration(cards, gold)
+    if args.multiturn and SCEN_PATH.exists():
+        eval_multiturn(cards)
     if args.judge and results:
         eval_judge(results)
 
