@@ -33,7 +33,12 @@ class Agent:
             user_text=user_text,
             cards_text=cards_text,
         )
-        raw = models.generate(prompt)
+        try:
+            raw = models.generate(prompt)
+        except models.ModelError:
+            # LLM down: empty raw flows through the parse/filter fallbacks
+            # below, ending in a verbatim top-card reply + caution line.
+            raw = ""
         control, reply, parse_ok = guardrails.split_and_parse(raw)
         next_state = self._advance(control)
         control.next_state = next_state
@@ -117,11 +122,22 @@ class Agent:
 
         current_section = None
         for line in lines:
-            if any(line.strip().startswith(s) for s in allowed):
-                current_section = [s for s in allowed if line.strip().startswith(s)][0]
+            section = self._section_label(line, allowed)
+            if section:
+                current_section = section
                 keep.append(line)
             elif current_section and line.strip() != "":
                 keep.append(line)
             elif current_section and line.strip() == "":
                 current_section = None
         return "\n".join(keep).strip()
+
+    @staticmethod
+    def _section_label(line: str, names) -> str | None:
+        """Match a voice header even when the model dresses it in markdown:
+        '**Guardian**', '### Guardian:', '- Guardian —', any case."""
+        s = line.strip().lstrip("#*->•–— \t").lstrip("*_").strip().lower()
+        for name in names:
+            if s.startswith(name.lower()):
+                return name
+        return None

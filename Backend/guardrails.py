@@ -21,10 +21,42 @@ SENTENCE_COVERAGE = 0.6
 GROUNDING_FLOOR = 0.5
 
 
+def _extract_json_object(text: str):
+    """Return the first balanced {...} block in text, or None. A non-greedy
+    regex breaks on nested objects (the Control schema nests PlanStep dicts
+    inside 'plan'), so walk the braces, ignoring ones inside strings."""
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_str = False
+    escaped = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escaped:
+            escaped = False
+            continue
+        if ch == "\\" and in_str:
+            escaped = True
+            continue
+        if ch == '"':
+            in_str = not in_str
+            continue
+        if in_str:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return None
+
+
 def split_and_parse(raw: str):
     """Returns (control, reply, parse_ok). parse_ok is False when the model
     broke the output contract and defaults were substituted."""
-    cj_match = re.search(r"CONTROL_JSON:\s*(\{.*?\})\s*REPLY:", raw, re.S)
+    cj_match = re.search(r"CONTROL_JSON:\s*(.*?)\s*REPLY:", raw, re.S)
     rp_match = re.search(r"REPLY:\s*(.*)\Z", raw, re.S)
 
     if not cj_match or not rp_match:
@@ -33,8 +65,11 @@ def split_and_parse(raw: str):
         return control, raw, False
 
     parse_ok = True
+    json_block = _extract_json_object(cj_match.group(1))
     try:
-        parsed = json.loads(cj_match.group(1))
+        parsed = json.loads(json_block) if json_block else {}
+        if not json_block:
+            parse_ok = False
     except Exception:
         parsed = {}
         parse_ok = False

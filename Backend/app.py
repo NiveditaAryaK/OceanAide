@@ -8,10 +8,14 @@ def main():
     while True:
         try:
             user = input("\n> ")
+            if not user.strip():
+                continue
             out = agent.step(user)
             print("\n" + out)
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, EOFError):
             break
+        except Exception as e:
+            print(f"\n[error] {e} — session continues, try again.")
 
 if __name__ == "__main__":
     main()

@@ -9,7 +9,13 @@ TIMEOUT = int(os.environ.get("MODEL_TIMEOUT", "120"))
 # content; 512 caused finish_reason=length with empty replies.
 MAX_TOKENS = int(os.environ.get("MODEL_MAX_TOKENS", "2048"))
 
-def generate(prompt: str) -> str:
+class ModelError(Exception):
+    """Local LLM server unreachable or returned an unusable response.
+    Callers should degrade gracefully (the agent falls back to verbatim
+    card content) instead of crashing."""
+
+
+def _request(prompt: str) -> str:
     r = requests.post(
         f"{BASE}/chat/completions",
         headers={"Authorization": f"Bearer {API_KEY}"},
@@ -28,4 +34,18 @@ def generate(prompt: str) -> str:
         timeout=TIMEOUT
     )
     r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+    choice = r.json()["choices"][0]
+    if choice.get("finish_reason") == "length":
+        print("[models] warning: reply truncated at max_tokens "
+              f"({MAX_TOKENS}); consider raising MODEL_MAX_TOKENS")
+    return choice["message"].get("content") or ""
+
+
+def generate(prompt: str) -> str:
+    last_err = None
+    for _ in range(2):
+        try:
+            return _request(prompt)
+        except (requests.exceptions.RequestException, KeyError, ValueError) as e:
+            last_err = e
+    raise ModelError(f"model server at {BASE} failed after retry: {last_err}") from last_err
