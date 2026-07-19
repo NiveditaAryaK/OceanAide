@@ -1,0 +1,16 @@
+{"query": "storm building, waves getting rough", "expected": ["guardian.heavy_weather"]}
+{"query": "man overboard, someone fell in the water", "expected": ["guardian.immediate_safety"]}
+{"query": "I cut my hand badly and it won't stop bleeding", "expected": ["guardian.health.firstaid"]}
+{"query": "how do I signal for help or send a distress call", "expected": ["guardian.distress"]}
+{"query": "I'm freezing, shivering and can't warm up", "expected": ["guardian.health.cold_heat"]}
+{"query": "exhausted on night watch, struggling to stay awake", "expected": ["guardian.night_ops"]}
+{"query": "lost my bearings, not sure which way land is", "expected": ["guardian.orientation"]}
+{"query": "feeling panicked and overwhelmed, heart racing", "expected": ["guardian.mental_firstaid", "companion.reframes"]}
+{"query": "the water is glowing blue at night", "expected": ["explorer.bioluminescence"]}
+{"query": "water suddenly feels much colder here", "expected": ["explorer.upwelling"]}
+{"query": "strong current seems to be pulling the boat sideways", "expected": ["explorer.tides_rips"]}
+{"query": "strange tall clouds on the horizon, what weather is coming", "expected": ["explorer.sky_clouds"]}
+{"query": "lots of birds diving into the water ahead", "expected": ["explorer.birds_fish"]}
+{"query": "bored and restless, need something to do out here", "expected": ["explorer.micro_missions", "companion.routines"]}
+{"query": "feeling hopeless and alone, why did I even come out here", "expected": ["companion.reframes", "companion.explorer_identity"]}
+{"query": "what daily routine keeps me sane on a long passage", "expected": ["companion.routines"]}

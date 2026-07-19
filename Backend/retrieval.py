@@ -1,17 +1,64 @@
-import json, pathlib
+import json, pathlib, re, unicodedata
 from typing import List, Dict
 from rank_bm25 import BM25Okapi
 
 IDX = pathlib.Path(__file__).resolve().parents[1] / "data" / "index.jsonl"
-# retrieval.py (global)
+
 _BM25 = None
-_CORPUS = None
-def _bm25_init(corpus):
-    global _BM25, _CORPUS
-    if _BM25 is None or _CORPUS is not corpus:
-        _BM25 = BM25Okapi([_tokenize(c) for c in corpus])
-        _CORPUS = corpus
+_CORPUS_KEY = None
+
+# Words too common to carry signal in a 20-card corpus.
+STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from",
+    "get", "has", "have", "how", "if", "in", "is", "it", "its", "my", "no",
+    "not", "of", "on", "or", "our", "so", "than", "that", "the", "their",
+    "them", "then", "there", "they", "this", "to", "was", "we", "were",
+    "what", "when", "where", "which", "while", "will", "with", "you", "your",
+}
+
+_WORD_RE = re.compile(r"[a-z0-9']+")
+
+# Map typographic punctuation to ASCII before tokenizing, so "ocean's"
+# (curly apostrophe) doesn't vanish from the index.
+_PUNCT_MAP = str.maketrans({
+    "’": "'", "‘": "'", "“": '"', "”": '"',
+    "–": "-", "—": "-", " ": " ",
+})
+
+
+def _stem(tok: str) -> str:
+    """Very light stemming: possessives and simple plurals only.
+    Plain 's' stripping keeps waves/wave and tides/tide aligned; a broader
+    'es' rule would map waves->wav and break the match."""
+    if tok.endswith("'s"):
+        tok = tok[:-2]
+    if len(tok) > 3 and tok.endswith("ies"):
+        return tok[:-3] + "y"
+    if len(tok) > 3 and tok.endswith(("xes", "ches", "shes", "zes")):
+        return tok[:-2]
+    if len(tok) > 3 and tok.endswith("s") and not tok.endswith("ss"):
+        return tok[:-1]
+    return tok
+
+
+def _tokenize(txt: str) -> List[str]:
+    txt = unicodedata.normalize("NFKD", txt).translate(_PUNCT_MAP).lower()
+    toks = []
+    for m in _WORD_RE.finditer(txt):
+        tok = _stem(m.group().strip("'"))
+        if tok and tok not in STOPWORDS:
+            toks.append(tok)
+    return toks
+
+
+def _bm25_init(corpus: List[str]) -> BM25Okapi:
+    global _BM25, _CORPUS_KEY
+    key = id(corpus)
+    if _BM25 is None or _CORPUS_KEY != key:
+        _BM25 = BM25Okapi([_tokenize(c) or ["<empty>"] for c in corpus])
+        _CORPUS_KEY = key
     return _BM25
+
 
 def load_cards():
     cards = []
@@ -20,17 +67,13 @@ def load_cards():
             cards.append(json.loads(line))
     return cards
 
-def _tokenize(txt: str) -> List[str]:
-    return [t for t in txt.lower().split() if t.isascii()]
-
-def _bm25_init(corpus: List[str]) -> BM25Okapi:
-    return BM25Okapi([_tokenize(c) for c in corpus])
 
 # simple type coverage → ensure at least one of each voice if possible
 VOICE_PREF = ("guardian", "explorer", "companion")
 
+
 def search(cards: List[Dict], query: str, k: int = 5) -> List[Dict]:
-    corpus = [c.get("text","") for c in cards]
+    corpus = [c.get("text", "") for c in cards]
     bm25 = _bm25_init(corpus)
 
     # top-N lexical hits

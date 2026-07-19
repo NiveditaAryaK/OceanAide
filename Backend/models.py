@@ -4,6 +4,7 @@ import os, requests
 BASE = os.environ.get("MODEL_BASE", "http://127.0.0.1:1234/v1")  # LM Studio default
 API_KEY = os.environ.get("MODEL_KEY", "offline-key")
 MODEL = os.environ.get("MODEL_NAME", "gpt-oss-20b")
+TIMEOUT = int(os.environ.get("MODEL_TIMEOUT", "120"))
 
 def generate(prompt: str) -> str:
     r = requests.post(
@@ -21,7 +22,7 @@ def generate(prompt: str) -> str:
             "stream": False,
             "stop": ["</END>"]  # You can add "</END>" at end of prompt if you like
         },
-        timeout=120
+        timeout=TIMEOUT
     )
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]

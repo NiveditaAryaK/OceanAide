@@ -2,6 +2,10 @@
 id: companion.reframes
 title: Quick reframes for tough moments
 tags: [companion, mindset]
+aliases:
+  - "feeling scared afraid panicked overwhelmed"
+  - "hopeless lonely alone out here"
+  - "tired discouraged want to give up"
 lines:
   - "Fear is a normal signal—it means you care about safety. Use it to act step by step."
   - "Tiredness makes problems look bigger. Rest 20 minutes, then re-check calmly."

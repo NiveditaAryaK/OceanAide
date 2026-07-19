@@ -25,6 +25,7 @@ def _render_card(meta: dict, body: str) -> str:
         "lines": "Lines",
         "snippets": "Snippets",
         "entries": "Entries",
+        "aliases": "Also known as",
     }
     for k, label in lists.items():
         v = meta.get(k)
