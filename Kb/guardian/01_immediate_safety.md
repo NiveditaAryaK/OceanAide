@@ -5,6 +5,8 @@ tags: [guardian, safety]
 aliases:
   - "man overboard"
   - "fell in the water"
+  - "went over the side"
+  - "person crew member in the sea"
   - "capsize"
   - "taking on water"
   - "emergency danger"

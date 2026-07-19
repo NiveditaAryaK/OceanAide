@@ -53,7 +53,9 @@ def _tokenize(txt: str) -> List[str]:
 
 def _bm25_init(corpus: List[str]) -> BM25Okapi:
     global _BM25, _CORPUS_KEY
-    key = id(corpus)
+    # Key on content, not id(): the corpus list is rebuilt every call, so a
+    # recycled id could serve a stale index after the cards change.
+    key = hash(tuple(corpus))
     if _BM25 is None or _CORPUS_KEY != key:
         _BM25 = BM25Okapi([_tokenize(c) or ["<empty>"] for c in corpus])
         _CORPUS_KEY = key

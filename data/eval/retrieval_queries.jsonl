@@ -14,3 +14,17 @@
 {"query": "bored and restless, need something to do out here", "expected": ["explorer.micro_missions", "companion.routines"]}
 {"query": "feeling hopeless and alone, why did I even come out here", "expected": ["companion.reframes", "companion.explorer_identity"]}
 {"query": "what daily routine keeps me sane on a long passage", "expected": ["companion.routines"]}
+{"query": "waves are slamming into the side of us", "expected": ["guardian.heavy_weather"]}
+{"query": "crew member went over the side, he's in the sea", "expected": ["guardian.immediate_safety"]}
+{"query": "burned my arm on the stove, skin is blistering", "expected": ["guardian.health.firstaid"]}
+{"query": "twisted my ankle on deck and it's swelling up", "expected": ["guardian.health.firstaid"]}
+{"query": "feel like throwing up from all this rocking", "expected": ["guardian.health.firstaid"]}
+{"query": "how do I call mayday on the radio", "expected": ["guardian.distress"]}
+{"query": "teeth chattering, fingers numb with cold", "expected": ["guardian.health.cold_heat"]}
+{"query": "so sleepy I keep nodding off at the helm", "expected": ["guardian.night_ops"]}
+{"query": "no idea where I am anymore, everything looks the same", "expected": ["guardian.orientation"]}
+{"query": "can't stop shaking, my mind is spiraling", "expected": ["guardian.mental_firstaid", "companion.reframes"]}
+{"query": "sparkles light up the wake when I stir the water", "expected": ["explorer.bioluminescence"]}
+{"query": "a dark wall of cloud is building on the horizon", "expected": ["explorer.sky_clouds"]}
+{"query": "nothing to look forward to out here, feeling really low", "expected": ["companion.reframes", "companion.explorer_identity"]}
+{"query": "give me a small task to keep my mind busy", "expected": ["explorer.micro_missions"]}

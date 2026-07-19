@@ -41,7 +41,17 @@ class Agent:
         grounding = guardrails.grounding_score(reply, selected)
         # filter first: apply_policies appends the caution line, which the
         # section filter would otherwise strip as an unlabeled line.
-        reply = self.filter_sections(reply, next_state)
+        filtered = self.filter_sections(reply, next_state)
+        if filtered.strip():
+            reply = filtered
+        elif not reply.strip():
+            # model returned nothing usable: answer verbatim from the top
+            # card so the user never gets silence, and flag low confidence
+            # so apply_policies adds the caution line.
+            reply = self._fallback_reply(selected)
+            grounding = 0.0
+        # else: filter stripped a non-empty reply (unexpected formatting);
+        # keep the unfiltered text rather than reply with nothing.
         reply = guardrails.apply_policies(reply, control, grounding)
 
         log_write(user_text, {**control.model_dump(),
@@ -84,6 +94,12 @@ class Agent:
             f"- [{h['state']}] user said: {h['user']!r} | goal: {h['goal']} | risk: {h['risk']}"
             for h in self.history
         )
+
+    def _fallback_reply(self, selected) -> str:
+        if not selected:
+            return "I don't have guidance for that in my cards. Try rephrasing with what you see or feel right now."
+        c = selected[0]
+        return f"I couldn't compose a full answer; here is my most relevant card, verbatim.\n\n[{c['id']}] {c['text']}"
 
     def filter_sections(self, reply: str, next_state: str) -> str:
         lines = reply.splitlines()

@@ -5,6 +5,9 @@ BASE = os.environ.get("MODEL_BASE", "http://127.0.0.1:1234/v1")  # LM Studio def
 API_KEY = os.environ.get("MODEL_KEY", "offline-key")
 MODEL = os.environ.get("MODEL_NAME", "gpt-oss-20b")
 TIMEOUT = int(os.environ.get("MODEL_TIMEOUT", "120"))
+# gpt-oss spends most of its budget on the reasoning channel before emitting
+# content; 512 caused finish_reason=length with empty replies.
+MAX_TOKENS = int(os.environ.get("MODEL_MAX_TOKENS", "2048"))
 
 def generate(prompt: str) -> str:
     r = requests.post(
@@ -18,7 +21,7 @@ def generate(prompt: str) -> str:
             ],
             "temperature": 0.0,
             "top_p": 1.0,
-            "max_tokens": 512,
+            "max_tokens": MAX_TOKENS,
             "stream": False,
             "stop": ["</END>"]  # You can add "</END>" at end of prompt if you like
         },

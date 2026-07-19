@@ -74,7 +74,10 @@ def grounding_score(reply: str, cards) -> float:
         if coverage >= SENTENCE_COVERAGE:
             grounded += 1
     if scored == 0:
-        return 1.0
+        # Nothing substantive to check (empty or fragment-only reply):
+        # treat as ungrounded so the caution policy kicks in, instead of
+        # letting a blank reply pass with a perfect score.
+        return 0.0
     return grounded / scored
 
 
