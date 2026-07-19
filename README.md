@@ -60,7 +60,9 @@ python Backend/eval_rag.py               # retrieval only: hit@1, hit@k, MRR (of
 python Backend/eval_rag.py --generation  # full agent per query (needs the LLM server up)
 ```
 
-The generation mode checks the output contract end to end: control-JSON parse rate, grounding score, caution-line policy, and voice-section discipline. Current scores (30 queries, gpt-oss-20b): retrieval **hit@1 100%, hit@4 100%, MRR 1.0**; generation **parse 100%, caution policy 100%, section discipline 100%, mean grounding 0.79**.
+The generation mode checks the output contract end to end: control-JSON parse rate, grounding score, caution-line policy, and voice-section discipline. Further modes: `--negative` (out-of-scope rejection), `--rgb` (noise robustness), `--judge` (LLM-judge faithfulness/relevance; calibrate with human labels in `data/eval/judge_calibration.jsonl`).
+
+Current scores (gpt-oss-20b): retrieval **hit@1 100%, hit@4 100%, MRR 1.0, nDCG@4 0.98** (30 queries); generation **parse 100%, caution policy 100%, section discipline 100%, mean grounding 0.98, worst-case 0.83**; **negative rejection 100%** (10 out-of-scope queries, no fabricated answers); noise robustness **parse 100%** with grounding 1.00 → 0.81 when half the context is replaced with irrelevant cards.
 
 To improve retrieval, add `aliases` (phrases users would actually type, including inflected forms — the stemmer only handles plurals) to a card's front-matter, rebuild the index, and re-run the eval. Grow the gold set with fresh phrasings before trusting the numbers.
 
