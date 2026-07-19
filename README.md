@@ -1,15 +1,19 @@
 # OceanAide (Ocean Node)
 
-An offline-first AI assistant for people at sea. Ocean Node answers safety, navigation, and morale questions using only a local knowledge base and a locally hosted LLM — no internet connection required.
+An offline-first AI assistant for people at sea. Ocean Node answers safety, ocean-knowledge, and morale questions using only a local knowledge base and a locally hosted LLM — no internet connection required. Every answer is grounded in the bundled knowledge cards; when the model can't produce a grounded reply, the assistant falls back to verbatim card content rather than improvising.
 
 ## How it works
 
 You type a log entry (e.g. "storm building, waves getting rough") into the CLI. The agent then:
 
-1. **Retrieves** the most relevant knowledge-base cards using BM25 lexical search, with diversity across the three "voices" (`Backend/retrieval.py`).
+1. **Retrieves** the most relevant knowledge-base cards using BM25 lexical search, with diversity across the three "voices" (`Backend/retrieval.py`). Cards carry query-language `aliases` in their front-matter so real user phrasings ("went over the side", "skin is blistering") match the right card.
 2. **Prompts** a local LLM (LM Studio-compatible OpenAI API, default `http://127.0.0.1:1234`) with the selected cards as the only allowed source of facts (`Backend/models.py`, `Backend/prompts.py`).
-3. **Validates** the response through guardrails — the model must emit a control JSON plus a reply, and only sections allowed for the current state are kept (`Backend/state.py`, `Backend/guardrails.py`).
-4. **Logs** every interaction to `data/logs/`.
+3. **Validates** the response through guardrails (`Backend/state.py`, `Backend/guardrails.py`):
+   - the model must emit a control JSON (brace-balanced parse; safe defaults on any violation) plus a reply;
+   - only voice sections allowed for the current state are kept (markdown-tolerant matching);
+   - a grounding score checks reply sentences against the retrieved cards — low grounding, low confidence, or high risk appends a fixed caution line.
+4. **Degrades safely**: if the model server is down, times out, or returns nothing usable, the agent answers with the top retrieved card verbatim plus the caution line — never silence, never invention.
+5. **Logs** every interaction to `data/logs/` (gitignored).
 
 ### Agent states and voices
 
@@ -24,15 +28,20 @@ The agent runs a small state machine — **Assess → Plan → Act → Reflect**
 ## Project layout
 
 ```
-Backend/          # Agent loop, retrieval, prompts, guardrails, LLM client
+Backend/          # Agent loop, retrieval, prompts, guardrails, LLM client, eval
 Kb/               # Knowledge base cards (Markdown with YAML front-matter)
 data/index.jsonl  # Built retrieval index
-data/logs/        # Interaction logs
+data/eval/        # Gold query set for the eval harness
+data/logs/        # Interaction logs (gitignored)
 ```
 
 ## Getting started
 
-1. Install dependencies (Python 3.13, `requests`, `rank-bm25`, `pyyaml`) and start a local LLM server (e.g. LM Studio). Configure via env vars: `MODEL_BASE`, `MODEL_KEY`, `MODEL_NAME`.
+1. Install dependencies (Python 3.13) and start a local LLM server (e.g. LM Studio):
+   ```
+   pip install -r requirements.txt
+   ```
+   Configure via env vars: `MODEL_BASE`, `MODEL_KEY`, `MODEL_NAME`, `MODEL_TIMEOUT`, `MODEL_MAX_TOKENS` (default 2048 — reasoning models like gpt-oss spend most of their budget thinking before they answer).
 2. Build the index from the knowledge base:
    ```
    python Backend/build_index.py
@@ -41,5 +50,18 @@ data/logs/        # Interaction logs
    ```
    python Backend/app.py
    ```
+
+## Evaluation
+
+A gold set of 30 real-phrasing queries lives in `data/eval/retrieval_queries.jsonl` (`{"query": ..., "expected": [card ids]}`).
+
+```
+python Backend/eval_rag.py               # retrieval only: hit@1, hit@k, MRR (offline, fast)
+python Backend/eval_rag.py --generation  # full agent per query (needs the LLM server up)
+```
+
+The generation mode checks the output contract end to end: control-JSON parse rate, grounding score, caution-line policy, and voice-section discipline. Current retrieval scores: **hit@1 100%, hit@4 100%, MRR 1.0**.
+
+To improve retrieval, add `aliases` (phrases users would actually type, including inflected forms — the stemmer only handles plurals) to a card's front-matter, rebuild the index, and re-run the eval. Grow the gold set with fresh phrasings before trusting the numbers.
 
 > **Disclaimer:** Guidance is grounded in the bundled knowledge cards only and is not a substitute for professional maritime training or emergency services. Use judgment; conditions vary.
