@@ -23,8 +23,11 @@ class Agent:
         self.last_control = None
         self.last_debug = None
 
-    def step(self, user_text: str):
-        selected = retrieval.search(self.cards, user_text, k=4)
+    def step(self, user_text: str, selected=None):
+        # selected override lets the eval harness inject a custom context
+        # (e.g. noisy cards for RGB robustness tests).
+        if selected is None:
+            selected = retrieval.search(self.cards, user_text, k=4)
         cards_text = "\n\n".join(f"[{c['id']}] {c['text']}" for c in selected)
         prompt = prompts.SYSTEM + "\n\n" + prompts.USER_TEMPLATE.format(
             current_state=self.state,
