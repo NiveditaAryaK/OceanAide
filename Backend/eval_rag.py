@@ -249,22 +249,28 @@ def eval_noise(cards, gold, sample=10, seed=7):
     rng = random.Random(seed)
     subset = gold[::max(1, len(gold) // sample)][:sample]
 
+    import guardrails
+
     def run(noisy):
         parse_n, ground = 0, []
         for item in subset:
             agent = Agent(cards)
-            selected = retrieval.search(cards, item["query"], k=K)
+            clean_selected = retrieval.search(cards, item["query"], k=K)
+            selected = clean_selected
             if noisy:
-                top_ids = {c["id"] for c in selected}
+                top_ids = {c["id"] for c in clean_selected}
                 pool = [c for c in cards if c["id"] not in top_ids]
-                selected = selected[:K // 2] + rng.sample(pool, K - K // 2)
+                selected = clean_selected[:K // 2] + rng.sample(pool, K - K // 2)
             try:
-                agent.step(item["query"], selected=selected)
+                reply = agent.step(item["query"], selected=selected)
             except Exception as e:
                 print(f"    [!] error on {item['query']!r}: {e}")
                 continue
             parse_n += agent.last_debug["parse_ok"]
-            ground.append(agent.last_debug["grounding"])
+            # Always score against the CLEAN cards: scoring against the
+            # noisy context would inflate grounding (bigger vocab = easier
+            # coverage). A reply that leans on the noise cards drops here.
+            ground.append(guardrails.grounding_score(reply, clean_selected))
         n = len(ground)
         return (parse_n / n if n else 0.0,
                 statistics.mean(ground) if ground else 0.0, n)
@@ -274,8 +280,8 @@ def eval_noise(cards, gold, sample=10, seed=7):
     print(f"\nNoise robustness ({len(subset)} queries, {K // 2}/{K} context cards replaced with noise)")
     print(f"  parse ok  : clean {clean_parse:6.1%}  noisy {noisy_parse:6.1%}")
     print(f"  grounding : clean {clean_ground:6.3f}  noisy {noisy_ground:6.3f}")
-    print("  (grounding vs the noisy context: a big drop means the model gets"
-          " distracted by irrelevant cards instead of using the relevant half)")
+    print("  (both scored against the clean relevant cards; a big noisy drop"
+          " means the model leaned on the irrelevant cards)")
 
 
 # -------------------------------------------------------------------- judge
